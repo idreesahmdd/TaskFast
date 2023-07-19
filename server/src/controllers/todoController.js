@@ -2,14 +2,26 @@ const prisma = require("../helpers/prisma.js");
 
 class TodoController {
   static getAllTodo = async (req, res, next) => {
+    const DEFAULT_LIMIT = 5;
+    const DEFAULT_PAGE = 1;
     try {
+      let { limit, page } = req.query;
+      limit = limit ? limit : DEFAULT_LIMIT;
+      page = page ? page : DEFAULT_PAGE;
+
+      const offset = (+page - 1) * +limit;
+
+      const count = await prisma.Todo.count({ where: { userId: req.loggedUser.id } });
       const todo = await prisma.Todo.findMany({
+        where: { userId: req.loggedUser.id },
+        take: +limit,
+        skip: offset,
         orderBy: {
           id: "asc"
         }
       });
 
-      res.status(200).json(todo);
+      res.status(200).json({ data: todo, currentPage: +page, totalPages: Math.ceil(count / +limit) });
     } catch (err) {
       next(err);
     }
@@ -18,7 +30,7 @@ class TodoController {
   static getTodoById = async (req, res, next) => {
     const { id } = req.params;
     try {
-      const todo = await prisma.Todo.findUnique({ where: { id: +id } });
+      const todo = await prisma.Todo.findUnique({ where: { id: +id, userId: req.loggedUser.id } });
       if (!todo) {
         return next({ name: "ErrorNotFound" });
       }
@@ -60,6 +72,24 @@ class TodoController {
           description,
           dueDate,
           dueTime
+        }
+      });
+
+      res.status(201).json({ msg: "Updated Successfully", data: todo });
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  static updateStatusTodo = async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+
+      const todo = await prisma.Todo.update({
+        where: { id: +id },
+        data: {
+          status
         }
       });
 

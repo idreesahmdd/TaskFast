@@ -2,23 +2,19 @@ const jwt = require("jsonwebtoken");
 const prisma = require("../helpers/prisma.js");
 
 async function authentication(req, res, next) {
-  const { access_token } = req.headers;
-
-  if (access_token) {
+  const authHeader = req.headers["authorization"];
+  if (authHeader) {
+    const access_token = authHeader.split(" ")[1];
     try {
       const decode = jwt.verify(access_token, process.env.JWT_SECRET);
-      const { id, email } = decode;
-      const user = await prisma.User.findUnique({ where: { id: +id } });
-      if (!user) {
-        next({ name: "ErrorNotFound" });
-      } else {
-        req.loggedUser = {
-          id: user.id,
-          email: user.email,
-          avatar: user.avatar
-        };
-        next();
-      }
+      const { id, email, avatar } = decode;
+
+      req.loggedUser = {
+        id: id,
+        email: email,
+        avatar: avatar
+      };
+      next();
     } catch (err) {
       next({ name: "JWTerror" });
     }
@@ -43,24 +39,7 @@ async function authorization(req, res, next) {
   }
 }
 
-async function authorizationUser(req, res, next) {
-  const { id } = req.loggedUser;
-  const userId = req.params.id;
-
-  const user = await prisma.User.findUnique({ where: { id: +userId } });
-  if (user) {
-    if (id === user.id) {
-      next();
-    } else {
-      next({ name: "Unauthorized" });
-    }
-  } else {
-    next({ name: "ErrorNotFound" });
-  }
-}
-
 module.exports = {
   authentication,
-  authorization,
-  authorizationUser
+  authorization
 };

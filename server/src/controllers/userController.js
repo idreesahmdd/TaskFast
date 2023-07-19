@@ -37,7 +37,10 @@ class UserController {
       const { email, password } = req.body;
 
       const findUser = await prisma.User.findUnique({
-        where: { email: email }
+        where: { email: email },
+        include: {
+          todos: true
+        }
       });
 
       if (!findUser) {
@@ -49,7 +52,7 @@ class UserController {
         return next({ name: "WrongPassword" });
       }
 
-      const token = jwt.sign({ id: findUser.id, email: findUser.email }, process.env.JWT_SECRET);
+      const token = jwt.sign({ id: findUser.id, email: findUser.email, avatar: findUser.avatar }, process.env.JWT_SECRET);
 
       delete findUser.password;
       return res.status(200).json({ token, user: findUser });
@@ -92,8 +95,12 @@ class UserController {
     try {
       const { id } = req.params;
       const { name, password } = req.body;
-      // const hashedPassword = await bcrypt.hash(password, 10);
+      const hashedPassword = await bcrypt.hash(password, 10);
       let fileName = "";
+
+      if (+id !== req.loggedUser.id) {
+        return next({ name: "Unauthorized" });
+      }
 
       if (req.file === undefined) {
         const existingUser = await prisma.User.findUnique({
@@ -104,7 +111,8 @@ class UserController {
         await prisma.User.update({
           where: { id: +id },
           data: {
-            name
+            name,
+            password: hashedPassword
           }
         });
       } else {
@@ -115,6 +123,7 @@ class UserController {
           where: { id: +id },
           data: {
             name,
+            password: hashedPassword,
             avatar: fileName
           }
         });
@@ -128,9 +137,17 @@ class UserController {
   static deleteUser = async (req, res, next) => {
     try {
       const { id } = req.params;
-      await prisma.User.delete({ where: { id: +id } });
 
-      res.status(200).json({ msg: `Deleted User with id : ${id} Successfully.` });
+      if (+id !== req.loggedUser.id) {
+        return next({ name: "Unauthorized" });
+      }
+
+      try {
+        await prisma.User.delete({ where: { id: +id } });
+        res.status(200).json({ msg: `Deleted User with id: ${id} Successfully.` });
+      } catch (err) {
+        next({ name: "ErrorNotFound" });
+      }
     } catch (err) {
       next(err);
     }
